@@ -1,4 +1,4 @@
-﻿namespace Generators;
+﻿namespace Generators.Displays;
 
 
 public struct DisplayValues

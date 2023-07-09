@@ -1,9 +1,6 @@
 ﻿using System.Text;
-using HawkMajor2;
 using HawkMajor2.Engine;
 using HawkMajor2.Engine.Displays;
-using HawkMajor2.Engine.Displays.Terms;
-using HawkMajor2.Engine.Displays.Types;
 using HawkMajor2.Language.Contexts;
 using HawkMajor2.Language.Inference;
 using HawkMajor2.Language.Lexing;
@@ -47,11 +44,7 @@ public partial class ScriptParser
         _displayManager = new DisplayManager(_termParser, _typeParser, _printer);
         
         var config = new LexerConfig {RegisterNewLines = true};
-        config.AddKeyword(";");
-        config.AddKeyword("=");
-        config.AddKeyword("}");
-        config.AddKeyword("{");
-        config.AddKeyword("\"");
+        config.AddKeywords(new []{";", "=", "}", "{", "\""});
         _baseLexerConfig = config;
     }
 
@@ -88,7 +81,7 @@ public partial class ScriptParser
         if (_lexer.Current is EndOfExpressionToken)
             return true;
 
-        if (!ExpectIdentifierName().Deconstruct(out var identifier, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var identifier, out var error))
             return error;
 
         return (identifier switch
@@ -121,7 +114,7 @@ public partial class ScriptParser
         if (!ExpectIdentifier().Deconstruct(out var fileIdentifier, out var error))
             return (false, error);
 
-        fileName.Append(fileIdentifier.Value);
+        fileName.Append(fileIdentifier);
         while (_lexer.Current is IdentifierToken {Value: var identifierValue})
         {
             fileName.Append($" {identifierValue}");
@@ -136,10 +129,10 @@ public partial class ScriptParser
 
     private Result ParseDisplay()
     {
-        if (!ExpectIdentifierName().Deconstruct(out var termOrType, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var termOrType, out var error))
             return error;
 
-        if (!ExpectIdentifierName().Deconstruct(out var variant, out error))
+        if (!ExpectIdentifier().Deconstruct(out var variant, out error))
             return error;
 
         return (termOrType, variant) switch
@@ -160,615 +153,41 @@ public partial class ScriptParser
     
     [ParseDisplay(false, true)]
     private partial Result ParseTermPrefixDisplay();
-    
-    /*private Result ParseTermPrefixDisplay()
-    {
-        if (!ExpectIdentifierName().Deconstruct(out var name, out var error))
-            return error;
 
-        if (!ExpectIdentifierName().Deconstruct(out var symbol, out error))
-            return error;
-        
-        if (!ExpectIdentifierName().Deconstruct(out var displayName, out error))
-            return error;
-        
-        if (!ExpectIdentifierName().Deconstruct(out var precedenceString, out error))
-            return error;
-        
-        if (!int.TryParse(precedenceString, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {precedenceString}");
+    [ParseDisplay(true, true)]
+    private partial Result ParseTermInfixDisplay();
 
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
+    [ParseDisplay(false, true)]
+    private partial Result ParseTermPostfixDisplay();
 
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
+    [ParseDisplay(false, true)]
+    private partial Result ParseTermLambdaDisplay();
 
-        _displayManager.ApplyDisplay(new TermPrefixDisplay(name, symbol, displayName, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }*/
-    
-    private Result ParseTermInfixDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
+    [ParseDisplay(false, false)]
+    private partial Result ParseTermConstantDisplay();
 
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        bool associativity;
-        
-        switch (identifierToken.Value)
-        {
-            case "left":
-                associativity = true;
-                break;
-            case "right":
-                associativity = false;
-                break;
-            default:
-                return _lexer.GenerateError($"Expected associativity, got {identifierToken.Value}");
-        }
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        if (!int.TryParse(identifierToken.Value, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {identifierToken.Value}");
+    [ParseDisplay(false, true)]
+    private partial Result ParseTypePrefixDisplay();
 
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
+    [ParseDisplay(true, true)]
+    private partial Result ParseTypeInfixDisplay();
 
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
+    [ParseDisplay(false, true)]
+    private partial Result ParseTypePostfixDisplay();
 
-        _displayManager.ApplyDisplay(new TermInfixDisplay(name, symbol, displayName, associativity, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }
-    
-    private Result ParseTermPostfixDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        if (!int.TryParse(identifierToken.Value, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {identifierToken.Value}");
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TermPostfixDisplay(name, symbol, displayName, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }
-
-    private Result ParseTermLambdaDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        if (!int.TryParse(identifierToken.Value, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {identifierToken.Value}");
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TermLambdaDisplay(name, symbol, displayName, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }
-
-    private Result ParseTermConstantDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TermConstantDisplay(name, symbol, displayName, interrupt, verify));
-        
-        return Result.Success;
-    }
-    
-    private Result ParseTypePrefixDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        if (!int.TryParse(identifierToken.Value, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {identifierToken.Value}");
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TypePrefixDisplay(name, symbol, displayName, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }
-    
-    private Result ParseTypeInfixDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        bool associativity;
-        
-        switch (identifierToken.Value)
-        {
-            case "left":
-                associativity = true;
-                break;
-            case "right":
-                associativity = false;
-                break;
-            default:
-                return _lexer.GenerateError($"Expected associativity, got {identifierToken.Value}");
-        }
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        if (!int.TryParse(identifierToken.Value, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {identifierToken.Value}");
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TypeInfixDisplay(name, symbol, displayName, associativity, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }
-    
-    private Result ParseTypePostfixDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        if (!int.TryParse(identifierToken.Value, out var precedence))
-            return _lexer.GenerateError($"Expected integer precedence, got {identifierToken.Value}");
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TypePostfixDisplay(name, symbol, displayName, precedence, interrupt, verify));
-        
-        return Result.Success;
-    }
-
-    private Result ParseTypeConstantDisplay()
-    {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
-            return error;
-        
-        var name = identifierToken.Value;
-
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var symbol = identifierToken.Value;
-        
-        if (!ExpectIdentifier().Deconstruct(out identifierToken, out error))
-            return error;
-        
-        var displayName = identifierToken.Value;
-
-        var interrupt = true;
-        var verify = true;
-        
-        if (_lexer.Current is IdentifierToken interruptToken)
-        {
-            switch (interruptToken.Value)
-            {
-                case "interrupt":
-                    interrupt = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noInterrupt":
-                    interrupt = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-        
-        if (_lexer.Current is IdentifierToken verifyToken)
-        {
-            switch (verifyToken.Value)
-            {
-                case "verify":
-                    verify = true;
-                    _lexer.MoveNext();
-                    break;
-                case "noVerify":
-                    verify = false;
-                    _lexer.MoveNext();
-                    break;
-            }
-        }
-
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        _displayManager.ApplyDisplay(new TypeConstantDisplay(name, symbol, displayName, interrupt, verify));
-        
-        return Result.Success;
-    }
+    [ParseDisplay(false, false)]
+    private partial Result ParseTypeConstantDisplay();
     
     private Result ParseTypeDefinition()
     {
-        if (!ExpectIdentifier().Deconstruct(out var nameToken, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
-        
-        var name = nameToken.Value;
 
-        if (!ExpectIdentifier().Deconstruct(out nameToken, out error))
+        if (!ExpectIdentifier().Deconstruct(out var constructorName, out error))
             return error;
-        
-        var constructorName = nameToken.Value;
 
-        if (!ExpectIdentifier().Deconstruct(out nameToken, out error))
+        if (!ExpectIdentifier().Deconstruct(out var destructorName, out error))
             return error;
-        
-        var destructorName = nameToken.Value;
         
         if (ExpectKeyword("=").IsError(out error))
             return error;
@@ -790,10 +209,8 @@ public partial class ScriptParser
 
     private Result ParseConstant()
     {
-        if (!ExpectIdentifier().Deconstruct(out var nameToken, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
-        
-        var name = nameToken.Value;
         
         if (ExpectKeyword("=").IsError(out error))
             return error;
@@ -814,10 +231,8 @@ public partial class ScriptParser
 
     private Result ParseStrategy(VisibilityModifier? modifier = null)
     {
-        if (!ExpectIdentifier().Deconstruct(out var nameToken, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
-        
-        var name = nameToken.Value;
         
         if (!ParseConjecture().Deconstruct(out var conjecture, out error))
             return error;
@@ -838,10 +253,8 @@ public partial class ScriptParser
 
         while (_lexer.Current is not KeywordToken {Value: "}"})
         {
-            if (!ExpectIdentifier().Deconstruct(out var instructionToken, out error))
+            if (!ExpectIdentifier().Deconstruct(out var instruction, out error))
                 return error;
-            
-            var instruction = instructionToken.Value;
 
             switch (instruction)
             {
@@ -960,10 +373,8 @@ public partial class ScriptParser
     private Result<StrategyInstruction> ParseStratApply(Dictionary<string, ShadowVarType> fixedTerms,
         Dictionary<string, ShadowVarType> fixedTypes)
     {
-        if (!ExpectIdentifier().Deconstruct(out var nameToken, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
-
-        var name = nameToken.Value;
 
         if (!ParseStratTheorem(fixedTerms, fixedTypes, false).Deconstruct(out var thm, out error))
             return error;
@@ -977,10 +388,8 @@ public partial class ScriptParser
     private Result<StrategyInstruction> ParseStratKernel(Dictionary<string, ShadowVarType> fixedTerms,
         Dictionary<string, ShadowVarType> fixedTypes)
     {
-        if (!ExpectIdentifier().Deconstruct(out var nameToken, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
-
-        var name = nameToken.Value;
 
         return name switch
         {
@@ -1114,7 +523,7 @@ public partial class ScriptParser
             if (!ExpectIdentifier().Deconstruct(out var typeString, out error))
                 return error;
             
-            return _typeParser.Parse(typeString.Value);
+            return _typeParser.Parse(typeString);
         }
         
         _lexer.MoveNext();
@@ -1179,7 +588,7 @@ public partial class ScriptParser
             if (!ExpectIdentifier().Deconstruct(out var termString, out error))
                 return error;
             
-            return _termParser.Parse(termString.Value);
+            return _termParser.Parse(termString);
         }
         
         _lexer.MoveNext();
@@ -1286,10 +695,8 @@ public partial class ScriptParser
 
     private Result ParseProof(VisibilityModifier? modifier = null)
     {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
+        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
-        
-        var name = identifierToken.Value;
         
         if (!ParseConjecture().Deconstruct(out var conjecture, out error))
             return error;
@@ -1375,10 +782,8 @@ public partial class ScriptParser
         {
             _lexer.MoveNext();
             SkipNewLines();
-            if (!ExpectIdentifier().Deconstruct(out var identifierToken, out error))
+            if (!ExpectIdentifier().Deconstruct(out var name, out error))
                 return error;
-            
-            var name = identifierToken.Value;
             
             if (!Workspace.Strategies.TryGetValue(name, out var strategy))
                 return _lexer.GenerateError($"Strategy {name} not found");
@@ -1401,10 +806,8 @@ public partial class ScriptParser
 
     private Result ParseModifier(VisibilityModifier modifier)
     {
-        if (!ExpectIdentifier().Deconstruct(out var identifierToken, out var error))
+        if (!ExpectIdentifier(out var identifier, out var error))
             return error;
-        
-        var identifier = identifierToken.Value;
 
         switch (identifier)
         {
@@ -1428,53 +831,57 @@ public partial class ScriptParser
             }
         }
     }
+    
 
-    private StringResult ExpectIdentifierName()
+    [InlineResult("identifier")]
+    private StringResult ExpectIdentifier()
     {
-        return !ExpectIdentifier().Deconstruct(out var identifierToken, out var error) ? (false, error) : (true, identifierToken.Value);
+        return !ExpectIdentifierToken().Deconstruct(out var identifierToken, out var error) ? (false, error) : (true, identifierToken.Value);
     }
     
-    private Result<IdentifierToken> ExpectIdentifier()
+    private Result<IdentifierToken> ExpectIdentifierToken()
     {
         SkipNewLines();
 
         if (_lexer.Current is KeywordToken { Value: "\"" })
-        {
-            var data = _lexer.GetCurrentTokenData();
-            _lexer.MoveNext();
-            var stringBuilder = new StringBuilder();
-            var first = true;
+            return GetQuotedIdentifier();
 
-            while (_lexer.Current is not KeywordToken { Value: "\"" })
-            {
-                if (!first)
-                {
-                    stringBuilder.Append(' ');
-                }
-                else
-                {
-                    first = false;
-                }
-
-                stringBuilder.Append(_lexer.Current.Value);
-                _lexer.MoveNext();
-                if (_lexer.Current is EndOfExpressionToken)
-                    return _lexer.GenerateError("Unexpected end of expression");
-                if (_lexer.Current is ErrorToken { Message: var errorMessage })
-                    return _lexer.GenerateError(errorMessage);
-            }
-            
-            _lexer.MoveNext();
-            return new IdentifierToken(stringBuilder.ToString(), data);
-        }
-        
         if (_lexer.Current is not IdentifierToken identifier)
             return _lexer.GenerateError("Expected identifier");
         
         _lexer.MoveNext();
         return identifier;
     }
-    
+
+    private Result<IdentifierToken> GetQuotedIdentifier()
+    {
+        var data = _lexer.GetCurrentTokenData();
+        _lexer.MoveNext();
+        var stringBuilder = new StringBuilder();
+        var first = true;
+
+        while (_lexer.Current is not KeywordToken { Value: "\"" })
+        {
+            if (first)
+                first = false;
+            else
+                stringBuilder.Append(' ');
+
+            stringBuilder.Append(_lexer.Current.Value);
+            _lexer.MoveNext();
+            switch (_lexer.Current)
+            {
+                case EndOfExpressionToken:
+                    return _lexer.GenerateError("Unexpected end of expression");
+                case ErrorToken { Message: var errorMessage }:
+                    return _lexer.GenerateError(errorMessage);
+            }
+        }
+
+        _lexer.MoveNext();
+        return new IdentifierToken(stringBuilder.ToString(), data);
+    }
+
     private Result Identifier(string identifier)
     {
         SkipNewLines();
@@ -1520,6 +927,7 @@ public partial class ScriptParser
             _lexer.MoveNext();
     }
     
+    [InlineResult]
     private Result ExpectEndOfLine()
     {
         switch (_lexer.Current)

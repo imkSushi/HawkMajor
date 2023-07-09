@@ -37,6 +37,12 @@ public class LexerConfig
             throw new ArgumentException($"Keyword '{keyword}' already exists.");
     }
     
+    public void AddKeywords(IEnumerable<string> keywords, bool canInterruptIdentifier = true)
+    {
+        foreach (var keyword in keywords)
+            AddKeyword(keyword, canInterruptIdentifier);
+    }
+    
     public bool TryRemoveKeyword(string keyword)
     {
         if (!_validKeywords.Remove(keyword))

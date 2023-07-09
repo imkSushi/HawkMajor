@@ -1,0 +1,10 @@
+﻿Script -> ScriptItem*
+ScriptItem -> Load | Strategy | Proof | ConstantDefinition | TypeDefinition | DisplayDefinition
+
+Load -> "load" STRING NewLine
+Strategy -> Modifier? "strategy" Name Conjecture '{' StrategyStmt* '}'
+Proof -> Modifier? "proof" Name Conjecture '{' ProofStmt* '}'
+ConstantDefinition -> "constant" Name '=' Term NewLine
+TypeDefinition -> "type" Name Name Name '=' Term NewLine
+DisplayDefinition -> "display" TermOrTypeString DisplayType Name Symbol DisplayName Associativity? Precedence? NewLine Interrupt? Verify? NewLine
+
