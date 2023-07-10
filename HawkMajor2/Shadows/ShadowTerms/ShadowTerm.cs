@@ -4,6 +4,7 @@ using Printing;
 using Results;
 using Valiant;
 using Valiant.Terms;
+using Valiant.Types;
 
 namespace HawkMajor2.Shadows.ShadowTerms;
 
@@ -33,8 +34,8 @@ public abstract record ShadowTerm : IPrintable
         Kernel kernel);
 
     public static ShadowTerm ToShadowTerm(Term term,
-        Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+        Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         return term switch
         {
@@ -47,4 +48,7 @@ public abstract record ShadowTerm : IPrintable
     }
     
     internal abstract ShadowTerm BindVariable(ShadowFree free, int depth);
+
+    public abstract ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types);
+    public abstract ShadowTerm FixMeta();
 }

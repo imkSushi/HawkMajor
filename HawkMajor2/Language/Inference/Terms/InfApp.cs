@@ -167,4 +167,9 @@ public sealed record InfApp(InfTerm Application, InfTerm Argument) : InfTerm
     {
         return $"({Application} {Argument})";
     }
+
+    public static InfApp FromApp(App app)
+    {
+        return new InfApp(FromTerm(app.Application), FromTerm(app.Argument));
+    }
 }

@@ -96,4 +96,9 @@ public sealed record InfFree(string Name, InfType Type) : InfVar(Type)
     {
         return Name;
     }
+
+    public static InfFree FromFree(Free free)
+    {
+        return new InfFree(free.Name, InfType.FromType(free.Type));
+    }
 }

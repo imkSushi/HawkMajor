@@ -15,17 +15,13 @@ public abstract record ShadowTyMeta : ShadowType
         name = Name;
     }
     
-    public static ShadowType FromTyVar(TyVar type, Dictionary<string, ShadowVarType> fixedTypes)
+    public static ShadowType FromTyVar(TyVar type, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         if (!fixedTypes.TryGetValue(type.Name, out var shadowType))
             return new ShadowTyVar(type.Name);
 
-        return shadowType switch
-        {
-            ShadowVarType.Fixed   => new ShadowTyFixed(type.Name),
-            ShadowVarType.Unfixed => new ShadowTyUnfixed(type.Name),
-            ShadowVarType.Free    => new ShadowTyVar(type.Name),
-            _                     => throw new ArgumentException()
-        };
+        return shadowType;
     }
+
+    public abstract override ShadowTyMeta FixMeta();
 }

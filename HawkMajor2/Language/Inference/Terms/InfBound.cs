@@ -99,4 +99,9 @@ public sealed record InfBound(int Index, InfType Type) : InfVar(Type)
     {
         return $"${Index}";
     }
+
+    public static InfBound FromBound(Bound bound)
+    {
+        return new InfBound(bound.Index, InfType.FromType(bound.Type));
+    }
 }

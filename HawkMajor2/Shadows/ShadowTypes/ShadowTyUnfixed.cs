@@ -68,4 +68,9 @@ public sealed record ShadowTyUnfixed : ShadowTyMeta
     {
         return new ShadowTyFixed(Name);
     }
+    
+    public override ShadowTyFixed FixMeta()
+    {
+        return new ShadowTyFixed(Name);
+    }
 }

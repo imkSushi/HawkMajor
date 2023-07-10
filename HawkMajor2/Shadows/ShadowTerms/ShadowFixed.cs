@@ -68,4 +68,14 @@ public sealed record ShadowFixed : ShadowMeta
     {
         return this;
     }
+
+    public override ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types)
+    {
+        return new ShadowFixed(Name, Type.FixTypes(types));
+    }
+
+    public override ShadowFixed FixMeta()
+    {
+        return new ShadowFixed(Name, Type.FixMeta());
+    }
 }

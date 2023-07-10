@@ -1,11 +1,12 @@
 ﻿using HawkMajor2.Language.Inference.Terms;
+using HawkMajor2.Language.Inference.Types;
 using Results;
 using Valiant;
 using Valiant.Terms;
 
 namespace HawkMajor2.Language.Inference;
 
-public sealed class SingleTermTypeInference : TypeInference<InfTerm, Term>
+public sealed class SingleTermTypeInference
 {
     private TermTypeInference _termTypeInference;
     
@@ -18,18 +19,24 @@ public sealed class SingleTermTypeInference : TypeInference<InfTerm, Term>
     {
         _termTypeInference = termTypeInference;
     }
-    
-    public override Result<InfTerm> PartialInference(InfTerm input)
-    {
-        if (!_termTypeInference.PartialInference(new List<InfTerm> {input}).Deconstruct(out var termWithTypes, out var error))
-            return error;
-        
-        return termWithTypes.First();
-    }
 
-    protected internal override Result<Term> BindTypes(InfTerm input)
+    public Result<Term> ApplyInference(InfTerm input, List<Term>? previousTerms = null)
     {
-        if (!_termTypeInference.BindTypes(new List<InfTerm> {input}).Deconstruct(out var termWithTypes, out var error))
+        List<InfTerm>? partial;
+        string? error;
+        
+        if (previousTerms == null)
+        {
+            if (!_termTypeInference.PartialInference(new List<InfTerm> {input}).Deconstruct(out partial, out error))
+                return error;
+        }
+        else
+        {
+            if (!_termTypeInference.PartialInference(new List<InfTerm> {input}, false, previousTerms).Deconstruct(out partial, out error))
+                return error;
+        }
+        
+        if (!_termTypeInference.BindTypes(partial).Deconstruct(out var termWithTypes, out error))
             return error;
         
         return termWithTypes.First();

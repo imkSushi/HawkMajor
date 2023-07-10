@@ -12,20 +12,9 @@ var script = """
 display term infix "=" "=" "=" right 100
 display type infix -> fun ⟶ left 100
 
-global strat Congruence "|- f x: a = g y: a"
-{
-    kernel cong "|- (f :fun a b) = g" "|- x = y"
-}
-
 global strat Assume "p |- p"
 {
-    kernel asm p:bool
-}
-
-global strat EqModusPonens "|- p"
-{
-    match "|- q :bool = p"
-    kernel mp "|- q :bool = p" "|- q"
+    kernel asm p
 }
 
 global strat Reflectivity "|- p = p"
@@ -33,14 +22,63 @@ global strat Reflectivity "|- p = p"
     kernel refl p
 }
 
+global strat Congruence "|- f x: a = g y: a"
+{
+    kernel cong "|- f = g" "|- x = y"
+}
+
+global strat EqModusPonens "|- p"
+{
+    match "|- q = p"
+    kernel mp "|- q = p" "|- q"
+}
+
 global proof Commutativity "p = q |- q = p"
 {
     "p = q |- (p = p) = (q = p)"
-    "|- p = p"
     "p = q |- q = p"
 }
 
+global strat Elimination "|- p"
+{
+    match "q |- p"
+    match "|- q"
+    kernel anti "|- q" "q |- p"
+    kernel mp "|- q = p" "|- q"
+}
+
+global strat Commutativity "|- p = q"
+{
+    prove "|- q = p"
+    prove "q = p |- p = q"
+    prove "|- p = q"
+}
+
+global proof Transitivity "p = q, q = r |- p = r"
+{
+    "q = r |- (p = q) = (p = r)"
+    "p = q, q = r |- p = r"
+}
+
+global strat Transitivity "|- p = r"
+{
+    match "|- p = q"
+    match "|- q = r"
+    prove "p = q, q = r |- p = r"
+    prove "|- p = r"
+}
+
+
 """;
+
+/*const T = "((\ x : bool . x) = (\ x . x))"
+display term const T T ⊤
+
+global proof Truth "|- T"
+{
+    "|- ((\ x : bool . x) = (\ x . x)) = T"
+    "|- T"
+}*/
 
 var result = parser.Parse(script);
 

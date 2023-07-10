@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Language.Inference.Types;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Language.Inference.Types;
 using HawkMajor2.NameGenerators;
 using Results;
 using Valiant;
@@ -169,5 +170,14 @@ public sealed record InfAbs(InfType ParameterType, string? ParameterName, InfTer
     public override string DefaultPrint()
     {
         return $"\\{ParameterName ?? ""}. {ParameterType}. {Body}";
+    }
+
+    public static InfTerm FromAbs(Abs abs)
+    {
+        var (body, free) = abs.GetBody();
+        
+        var bodyTerm = FromTerm(body);
+        
+        return new InfAbs(InfType.FromType(abs.ParameterType), free.Name, bodyTerm);
     }
 }

@@ -75,4 +75,14 @@ public sealed record ShadowBound : ShadowVar
     {
         return this;
     }
+
+    public override ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types)
+    {
+        return new ShadowBound(Index, Type.FixTypes(types));
+    }
+
+    public override ShadowBound FixMeta()
+    {
+        return new ShadowBound(Index, Type.FixMeta());
+    }
 }

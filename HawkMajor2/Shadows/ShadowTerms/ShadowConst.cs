@@ -97,9 +97,19 @@ public sealed record ShadowConst : ShadowTerm
     {
         return this;
     }
-    
-    public static ShadowConst FromConst(Const constant, Dictionary<string, ShadowVarType> fixedTerms, Dictionary<string, ShadowVarType> fixedTypes)
+
+    public override ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types)
+    {
+        return new ShadowConst(Name, Type.FixTypes(types));
+    }
+
+    public static ShadowConst FromConst(Const constant, Dictionary<string, ShadowVar> fixedTerms, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         return new ShadowConst(constant.Name, ShadowType.ToShadowType(constant.Type, fixedTypes));
+    }
+
+    public override ShadowConst FixMeta()
+    {
+        return new ShadowConst(Name, Type.FixMeta());
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using HawkMajor2.Engine;
 using HawkMajor2.Engine.Displays;
+using HawkMajor2.Engine.StrategyInstructions;
 using HawkMajor2.Language.Contexts;
 using HawkMajor2.Language.Inference;
 using HawkMajor2.Language.Lexing;
@@ -237,9 +238,12 @@ public partial class ScriptParser
         if (!ParseConjecture().Deconstruct(out var conjecture, out error))
             return error;
 
-        var frees = conjecture.FreesIn().ToDictionary(x => x.Name, _ => ShadowVarType.Unfixed);
-        var freeTypes = conjecture.FreeTypesIn().ToDictionary(x => x.Name, _ => ShadowVarType.Unfixed);
+        var previousTerms = new List<Term> { conjecture.Conclusion };
+        previousTerms.AddRange(conjecture.Premises);
 
+        var freeTypes = conjecture.FreeTypesIn().ToDictionary(x => x.Name, x => (ShadowTyMeta) new ShadowTyUnfixed(x.Name));
+        var frees = conjecture.FreesIn().ToDictionary(x => x.Name, x => (ShadowVar)new ShadowUnfixed(x.Name, ShadowType.ToShadowType(x.Type, freeTypes)));
+        
         var shadowTheorem = ShadowTheorem.FromConjecture(conjecture, frees, freeTypes);
 
         FixVariables(frees, freeTypes);
@@ -260,7 +264,7 @@ public partial class ScriptParser
             {
                 case "match":
                 {
-                    if (!ParseStratMatch(frees, freeTypes).Deconstruct(out var stratMatch, out error))
+                    if (!ParseStratMatch(frees, freeTypes, previousTerms).Deconstruct(out var stratMatch, out error))
                         return error;
                     
                     instructions.Add(stratMatch);
@@ -268,7 +272,7 @@ public partial class ScriptParser
                 }
                 case "prove":
                 {
-                    if (!ParseStratProve(frees, freeTypes).Deconstruct(out var stratProve, out error))
+                    if (!ParseStratProve(frees, freeTypes, previousTerms).Deconstruct(out var stratProve, out error))
                         return error;
                     
                     instructions.Add(stratProve);
@@ -276,7 +280,7 @@ public partial class ScriptParser
                 }
                 case "apply":
                 {
-                    if (!ParseStratApply(frees, freeTypes).Deconstruct(out var stratApply, out error))
+                    if (!ParseStratApply(frees, freeTypes, previousTerms).Deconstruct(out var stratApply, out error))
                         return error;
                     
                     instructions.Add(stratApply);
@@ -284,7 +288,7 @@ public partial class ScriptParser
                 }
                 case "kernel":
                 {
-                    if (!ParseStratKernel(frees, freeTypes).Deconstruct(out var stratKernel, out error))
+                    if (!ParseStratKernel(frees, freeTypes, previousTerms).Deconstruct(out var stratKernel, out error))
                         return error;
                     
                     instructions.Add(stratKernel);
@@ -323,44 +327,47 @@ public partial class ScriptParser
         return Result.Success;
     }
 
-    private Result<StrategyInstruction> ParseStratMatch(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseStratMatch(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var thm, out var error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out var error))
             return error;
 
         return new ProveLocal(thm);
     }
     
-    private Result<StrategyInstruction> ParseStratProve(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseStratProve(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var thm, out var error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out var error))
             return error;
 
         return new Prove(thm);
     }
 
-    private Result<ShadowTheorem> ParseStratTheorem(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes, bool endLine = true)
+    private Result<ShadowTheorem> ParseStratTheorem(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms, bool endLine = true)
     {
-        if (!ParseConjecture().Deconstruct(out var conjecture, out var error))
+        if (!ParseConjecture(previousTerms).Deconstruct(out var conjecture, out var error))
             return error;
+        
+        previousTerms.Add(conjecture.Conclusion);
+        previousTerms.AddRange(conjecture.Premises);
 
         if (endLine)
         {
             if (ExpectEndOfLine().IsError(out error))
                 return error;
         }
-
-        foreach (var free in conjecture.FreesIn())
-        {
-            fixedTerms.TryAdd(free.Name, ShadowVarType.Unfixed);
-        }
         
         foreach (var freeType in conjecture.FreeTypesIn())
         {
-            fixedTypes.TryAdd(freeType.Name, ShadowVarType.Unfixed);
+            fixedTypes.TryAdd(freeType.Name, new ShadowTyUnfixed(freeType.Name));
+        }
+
+        foreach (var free in conjecture.FreesIn().Where(free => !fixedTerms.ContainsKey(free.Name)))
+        {
+            fixedTerms[free.Name] = new ShadowUnfixed(free.Name, ShadowType.ToShadowType(free.Type, fixedTypes));
         }
         
         var shadowTheorem = ShadowTheorem.FromConjecture(conjecture, fixedTerms, fixedTypes);
@@ -370,13 +377,13 @@ public partial class ScriptParser
         return shadowTheorem;
     }
     
-    private Result<StrategyInstruction> ParseStratApply(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseStratApply(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
         if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
 
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, false).Deconstruct(out var thm, out error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var thm, out error))
             return error;
         
         if (!Workspace.Strategies.TryGetValue(name, out var strategy))
@@ -385,30 +392,30 @@ public partial class ScriptParser
         return new ProveBy(strategy, thm);
     }
     
-    private Result<StrategyInstruction> ParseStratKernel(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseStratKernel(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
         if (!ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
 
         return name switch
         {
-            "refl" => ParseKernelReflectivity(fixedTerms, fixedTypes),
-            "cong" => ParseKernelCongruence(fixedTerms, fixedTypes),
-            "pabs" => ParseKernelParameterAbstraction(fixedTerms, fixedTypes),
-            "tabs" => ParseKernelTypeAbstraction(fixedTerms, fixedTypes),
-            "beta" => ParseKernelBetaReduction(fixedTerms, fixedTypes),
-            "asm" => ParseKernelAssume(fixedTerms, fixedTypes),
-            "mp" => ParseKernelModusPonens(fixedTerms, fixedTypes),
-            "anti" => ParseKernelAntisymmetry(fixedTerms, fixedTypes),
-            _ => _lexer.GenerateError($"Unrecognised kernel strategy: {name}")
+            "refl" => ParseKernelReflectivity(fixedTerms, fixedTypes, previousTerms),
+            "cong" => ParseKernelCongruence(fixedTerms, fixedTypes, previousTerms),
+            "pabs" => ParseKernelParameterAbstraction(fixedTerms, fixedTypes, previousTerms),
+            "tabs" => ParseKernelTypeAbstraction(fixedTerms, fixedTypes, previousTerms),
+            "beta" => ParseKernelBetaReduction(fixedTerms, fixedTypes, previousTerms),
+            "asm"  => ParseKernelAssume(fixedTerms, fixedTypes, previousTerms),
+            "mp"   => ParseKernelModusPonens(fixedTerms, fixedTypes, previousTerms),
+            "anti" => ParseKernelAntisymmetry(fixedTerms, fixedTypes, previousTerms),
+            _      => _lexer.GenerateError($"Unrecognised kernel strategy: {name}")
         };
     }
     
-    private Result<StrategyInstruction> ParseKernelReflectivity(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelReflectivity(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTerm(fixedTerms, fixedTypes).Deconstruct(out var term, out var error))
+        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var term, out var error))
             return error;
         
         if (ExpectEndOfLine().IsError(out error))
@@ -417,49 +424,49 @@ public partial class ScriptParser
         return new KernelReflexivity(term);
     }
     
-    private Result<StrategyInstruction> ParseKernelCongruence(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelCongruence(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, false).Deconstruct(out var appThm, out var error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var appThm, out var error))
             return error;
         
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var argThm, out error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var argThm, out error))
             return error;
 
         return new KernelCongruence(appThm, argThm);
     }
     
-    private Result<StrategyInstruction> ParseKernelParameterAbstraction(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelParameterAbstraction(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTerm(fixedTerms, fixedTypes).Deconstruct(out var term, out var error))
+        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var term, out var error))
             return error;
         
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var thm, out error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out error))
             return error;
 
         return new KernelParameterAbstraction(term, thm);
     }
     
-    private Result<StrategyInstruction> ParseKernelTypeAbstraction(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelTypeAbstraction(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
         if (!ParseStratType(fixedTypes).Deconstruct(out var type, out var error))
             return error;
         
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var thm, out error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out error))
             return error;
 
         return new KernelTypeAbstraction(type, thm);
     }
     
-    private Result<StrategyInstruction> ParseKernelBetaReduction(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelBetaReduction(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTerm(fixedTerms, fixedTypes).Deconstruct(out var term, out var error))
+        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var term, out var error))
             return error;
         
-        if (!ParseStratTerm(fixedTerms, fixedTypes).Deconstruct(out var arg, out error))
+        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var arg, out error))
             return error;
         
         if (ExpectEndOfLine().IsError(out error))
@@ -468,10 +475,10 @@ public partial class ScriptParser
         return new KernelBetaReduction(term, arg);
     }
     
-    private Result<StrategyInstruction> ParseKernelAssume(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelAssume(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTerm(fixedTerms, fixedTypes).Deconstruct(out var thm, out var error))
+        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out var error))
             return error;
         
         if (ExpectEndOfLine().IsError(out error))
@@ -480,31 +487,31 @@ public partial class ScriptParser
         return new KernelAssume(thm);
     }
     
-    private Result<StrategyInstruction> ParseKernelModusPonens(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelModusPonens(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, false).Deconstruct(out var maj, out var error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var maj, out var error))
             return error;
         
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var min, out error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var min, out error))
             return error;
 
         return new KernelEqModusPonens(maj, min);
     }
     
-    private Result<StrategyInstruction> ParseKernelAntisymmetry(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<StrategyInstruction> ParseKernelAntisymmetry(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, false).Deconstruct(out var left, out var error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var left, out var error))
             return error;
         
-        if (!ParseStratTheorem(fixedTerms, fixedTypes).Deconstruct(out var right, out error))
+        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var right, out error))
             return error;
 
         return new KernelAntisymmetry(left, right);
     }
 
-    private Result<ShadowType> ParseStratType(Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<ShadowType> ParseStratType(Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         if (!ParseType().Deconstruct(out var type, out var error))
             return error;
@@ -568,17 +575,21 @@ public partial class ScriptParser
         return _typeParser.Parse(conjectureStringBuilder.ToString());
     }
 
-    private Result<ShadowTerm> ParseStratTerm(Dictionary<string, ShadowVarType> fixedTerms,
-        Dictionary<string, ShadowVarType> fixedTypes)
+    private Result<ShadowTerm> ParseStratTerm(Dictionary<string, ShadowVar> fixedTerms,
+        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
     {
-        if (!ParseTerm().Deconstruct(out var term, out var error))
+        if (!ParseTerm(previousTerms).Deconstruct(out var term, out var error))
             return error;
+        
+        previousTerms.Add(term);
         
         return ShadowTerm.ToShadowTerm(term, fixedTerms, fixedTypes);
     }
 
-    private Result<Term> ParseTerm()
+    private Result<Term> ParseTerm(List<Term>? previousTerms = null)
     {
+        previousTerms ??= new List<Term>();
+        
         SkipNewLines();
         
         string? error;
@@ -630,24 +641,28 @@ public partial class ScriptParser
 
         _lexer.MoveNext();
 
-        return _termParser.Parse(conjectureStringBuilder.ToString());
+        return _termParser.Parse(conjectureStringBuilder.ToString(), previousTerms);
     }
 
-    private static void FixVariables(Dictionary<string, ShadowVarType> frees, Dictionary<string, ShadowVarType> freeTypes)
+    private static void FixVariables(Dictionary<string, ShadowVar> frees, Dictionary<string, ShadowTyMeta> freeTypes)
     {
         foreach (var key in frees.Keys)
         {
-            frees[key] = ShadowVarType.Fixed;
+            var value = frees[key];
+            frees[key] = value.FixMeta();
         }
 
         foreach (var key in freeTypes.Keys)
         {
-            freeTypes[key] = ShadowVarType.Fixed;
+            var value = freeTypes[key];
+            freeTypes[key] = value.FixMeta();
         }
     }
 
-    private Result<Conjecture> ParseConjecture()
+    private Result<Conjecture> ParseConjecture(List<Term>? previousTerms = null)
     {
+        previousTerms ??= new List<Term>();
+        
         string? error;
         if (ExpectKeyword("\"").IsError(out error))
             return error;
@@ -690,7 +705,7 @@ public partial class ScriptParser
 
         _lexer.MoveNext();
 
-        return _theoremParser.Parse(conjectureStringBuilder.ToString());
+        return _theoremParser.Parse(conjectureStringBuilder.ToString(), previousTerms);
     }
 
     private Result ParseProof(VisibilityModifier? modifier = null)

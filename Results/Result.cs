@@ -108,6 +108,11 @@ public class Result<T>
     {
         return Success ? $"Success: {Value}" : $"Failure: {Message}";
     }
+    
+    public Result<TOut> ErrorOr<TOut>(Func<T, TOut> func)
+    {
+        return Success ? func(Value) : Message;
+    }
 }
 
 public class Result<T1, T2> : Result<(T1, T2)>

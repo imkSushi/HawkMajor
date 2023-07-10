@@ -2,20 +2,34 @@
 using HawkMajor2.Language.Inference;
 using HawkMajor2.Language.Inference.Types;
 using HawkMajor2.Language.Lexing;
+using Results;
 using Valiant;
 
 namespace HawkMajor2.Language.Parsing;
 
-public class TypeParser : Parser<TypeContext, TypeTypeInference, InfType, Type>
+public class TypeParser
 {
-    public TypeParser(Kernel kernel, Lexer lexer, TypeContext context) : base(context, new TypeTypeInference(kernel),
-        lexer)
+    public readonly TypeContext Context;
+    public readonly TypeTypeInference TypeInference;
+    public readonly Lexer Lexer;
+    public TypeParser(Kernel kernel, Lexer lexer, TypeContext context)
     {
-        
+        Context = context;
+        TypeInference = new TypeTypeInference(kernel);
+        Lexer = lexer;
     }
     
-    public TypeParser(Kernel kernel, Lexer lexer) : this(kernel, lexer, new TypeContext(lexer, kernel))
+    public Result<Type> Parse(string input)
     {
+        Context.SetLexerConfig();
         
+        Lexer.Reset(input);
+
+        Lexer.MoveNext();
+        
+        if (!Context.Parse().Deconstruct(out var type, out var error)) 
+            return error;
+        
+        return TypeInference.ApplyInference(type);
     }
 }

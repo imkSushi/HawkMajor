@@ -56,4 +56,9 @@ public sealed record ShadowTyVar : ShadowType
     {
         return this;
     }
+    
+    public override ShadowTyVar FixMeta()
+    {
+        return this;
+    }
 }

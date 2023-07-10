@@ -5,8 +5,9 @@ using Valiant;
 
 namespace HawkMajor2.Language.Inference;
 
-public class TypeTypeInference : TypeInference<InfType, Type>
+public class TypeTypeInference
 {
+    
     private Kernel _kernel;
     
     public TypeTypeInference(Kernel kernel)
@@ -14,12 +15,7 @@ public class TypeTypeInference : TypeInference<InfType, Type>
         _kernel = kernel;
     }
     
-    public override Result<InfType> PartialInference(InfType input)
-    {
-        return input;
-    }
-
-    protected internal override Result<Type> BindTypes(InfType input)
+    public virtual Result<Type> ApplyInference(InfType input)
     {
         var unboundTypeNames = new Dictionary<string, string>();
         var nameGenerator = new NameGenerator

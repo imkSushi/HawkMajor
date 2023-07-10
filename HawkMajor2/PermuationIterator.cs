@@ -51,7 +51,7 @@ public class PermuationIterator : IEnumerator<int[]>
             Current[Cursor]++;
         } while (MustIncreaseCursorValue());
         
-        if (Current[Cursor] == Length)
+        if (Current[Cursor] == MaxValue)
         {
             if (Cursor == 0)
                 return false;
@@ -90,5 +90,10 @@ public class PermuationIterator : IEnumerator<int[]>
     public void Dispose()
     {
         
+    }
+
+    public override string ToString()
+    {
+        return $"Cursor: {Cursor}, Current: [{string.Join(", ", Current)}]";
     }
 }

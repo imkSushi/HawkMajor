@@ -54,4 +54,17 @@ public abstract record InfTerm : IPrintable
     public abstract void GetFrees(HashSet<(string name, InfType type)> frees);
     
     public abstract string DefaultPrint();
+
+    public static InfTerm FromTerm(Term term)
+    {
+        return term switch
+        {
+            Abs abs => InfAbs.FromAbs(abs),
+            App app => InfApp.FromApp(app),
+            Free free => InfFree.FromFree(free),
+            Const constant => InfConst.FromConst(constant),
+            Bound bound => InfBound.FromBound(bound),
+            _ => throw new Exception("Unknown term type")
+        };
+    }
 }

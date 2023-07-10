@@ -139,10 +139,15 @@ public sealed record ShadowTyApp : ShadowType
         return new ShadowTyApp(Name, Args.Select(arg => arg.FixTypes(toFix)).ToArray());
     }
 
-    public static ShadowTyApp FromTyApp(TyApp type, Dictionary<string, ShadowVarType> fixedTypes)
+    public static ShadowTyApp FromTyApp(TyApp type, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         var args = type.Args.Select(arg => ToShadowType(arg, fixedTypes)).ToList();
 
         return new ShadowTyApp(type.Name, args.AsReadOnly());
+    }
+    
+    public override ShadowTyApp FixMeta()
+    {
+        return new ShadowTyApp(Name, Args.Select(arg => arg.FixMeta()).ToArray());
     }
 }

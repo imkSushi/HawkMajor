@@ -19,8 +19,13 @@ public sealed class TermTypeInference : TypeInference<List<InfTerm>, List<Term>>
     {
         return PartialInference(input, false);
     }
-    
+
     public Result<List<InfTerm>> PartialInference(List<InfTerm> input, bool allBools)
+    {
+        return PartialInference(input, allBools, new List<Term>());
+    }
+    
+    public Result<List<InfTerm>> PartialInference(List<InfTerm> input, bool allBools, List<Term> typeMatching)
     {
         string? error;
         
@@ -32,7 +37,7 @@ public sealed class TermTypeInference : TypeInference<List<InfTerm>, List<Term>>
        
         var uniquelyTypeds = new List<InfTerm>();
         
-        foreach (var inputTerm in input)
+        foreach (var inputTerm in input.Concat(typeMatching.Select(InfTerm.FromTerm)))
         {
             var uniquelyTyped = UniquifyUnboundTypeNames(inputTerm, nameGenerator);
             uniquelyTypeds.Add(uniquelyTyped);
@@ -59,7 +64,7 @@ public sealed class TermTypeInference : TypeInference<List<InfTerm>, List<Term>>
         if (!GenerateMappings(fixedAbses, nameGenerator, allBools).Deconstruct(out var mappings, out error))
             return error;
 
-        return EvaluateMappings(fixedAbses, mappings);
+        return EvaluateMappings(fixedAbses, mappings).ErrorOr(list => list.GetRange(0, input.Count));
     }
 
     protected internal override Result<List<Term>> BindTypes(List<InfTerm> input)

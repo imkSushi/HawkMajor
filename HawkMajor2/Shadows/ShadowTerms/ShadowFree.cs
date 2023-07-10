@@ -86,4 +86,14 @@ public sealed record ShadowFree : ShadowVar
         
         return this;
     }
+
+    public override ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types)
+    {
+        return new ShadowFree(Name, Type.FixTypes(types));
+    }
+
+    public override ShadowFree FixMeta()
+    {
+        return new ShadowFree(Name, Type.FixMeta());
+    }
 }

@@ -109,10 +109,51 @@ public class Workspace
         return null;
     }
 
+    public ProofLog? ProveWithLog(Conjecture conjecture)
+    {
+        if (ConjectureStack.Contains(conjecture))
+            return null;
+        
+        ConjectureStack.Push(conjecture);
+        
+        var theoremTuple = CheckIfInstanceWithLog(conjecture);
+        if (theoremTuple is not null)
+        {
+            ConjectureStack.Pop();
+            var (theorem, instancedFrom) = theoremTuple.Value;
+            return new ProofLog(theorem, new ProofByInstantiation(instancedFrom));
+        }
+
+        foreach (var strategy in CurrentScope.EnumerateStrategies())
+        {
+            var output = strategy.Apply(conjecture, this);
+            if (output is not null)
+            {
+                ConjectureStack.Pop();
+                return new ProofLog(output, new ProofByAssertion(output));
+            }
+        }
+        
+        ConjectureStack.Pop();
+        return null;
+    }
+
     public Theorem? CheckIfInstance(Conjecture conjecture)
     {
         return CurrentScope.EnumerateTheorems()
             .Select(theorem => conjecture.CheckIfInstance(theorem, Kernel))
             .FirstOrDefault(output => output is not null);
+    }
+
+    public (Theorem theorem, Theorem instancedFrom)? CheckIfInstanceWithLog(Conjecture conjecture)
+    {
+        foreach (var theorem in CurrentScope.EnumerateTheorems())
+        {
+            var output = conjecture.CheckIfInstance(theorem, Kernel);
+            if (output is not null)
+                return (theorem, output);
+        }
+        
+        return null;
     }
 }

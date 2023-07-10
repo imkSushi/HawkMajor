@@ -1,9 +1,10 @@
 ﻿using Results;
 using Valiant;
+using Valiant.Terms;
 
 namespace HawkMajor2.Language.Inference;
 
-public class TheoremTypeInference : TypeInference<InfTheorem, Conjecture>
+public class TheoremTypeInference
 {
     private TermTypeInference _termTypeInference;
     
@@ -11,13 +12,26 @@ public class TheoremTypeInference : TypeInference<InfTheorem, Conjecture>
     {
         _termTypeInference = new TermTypeInference(kernel);
     }
+
+    public  Result<Conjecture> FullInference(InfTheorem input)
+    {
+        return FullInference(input, new List<Term>());
+    }
+
+    public  Result<Conjecture> FullInference(InfTheorem input, List<Term> equivalentTerms)
+    {
+        if (!PartialInference(input, equivalentTerms).Deconstruct(out var partial, out var error))
+            return error;
+        
+        return BindTypes(partial);
+    }
     
-    public override Result<InfTheorem> PartialInference(InfTheorem input)
+    public Result<InfTheorem> PartialInference(InfTheorem input, List<Term> equivalentTerms)
     {
         var terms = input.Premises.ToList();
         terms.Add(input.Conclusion);
         
-        var result = _termTypeInference.PartialInference(terms, true);
+        var result = _termTypeInference.PartialInference(terms, true, equivalentTerms);
         
         if (!result.Deconstruct(out var termsWithTypes, out var error))
             return error;
@@ -27,7 +41,7 @@ public class TheoremTypeInference : TypeInference<InfTheorem, Conjecture>
         return new InfTheorem(termsWithTypes.Last(), premises.ToArray());
     }
 
-    protected internal override Result<Conjecture> BindTypes(InfTheorem input)
+    private Result<Conjecture> BindTypes(InfTheorem input)
     {
         var terms = input.Premises.ToList();
         terms.Add(input.Conclusion);

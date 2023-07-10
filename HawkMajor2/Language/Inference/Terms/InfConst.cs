@@ -178,4 +178,9 @@ public sealed record InfConst(string Name, InfType Type) : InfTerm
     {
         return Name;
     }
+
+    public static InfConst FromConst(Const constant)
+    {
+        return new InfConst(constant.Name, InfType.FromType(constant.Type));
+    }
 }

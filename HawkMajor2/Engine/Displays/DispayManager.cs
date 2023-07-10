@@ -67,7 +67,7 @@ public class DisplayManager
     
     private Result ApplyTypePrefixDisplay(TypePrefixDisplay display)
     {
-        if (_typeParser.Context.AddPrefixRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_typeParser.Context.AddPrefixRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddPrefixTypeRule(display.Name, display.Display, display.Precedence);
@@ -77,7 +77,7 @@ public class DisplayManager
     
     private Result ApplyTypePostfixDisplay(TypePostfixDisplay display)
     {
-        if (_typeParser.Context.AddPostfixRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_typeParser.Context.AddPostfixRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddPostfixTypeRule(display.Name, display.Display, display.Precedence);
@@ -87,7 +87,7 @@ public class DisplayManager
     
     private Result ApplyTypeConstantDisplay(TypeConstantDisplay display)
     {
-        if (_typeParser.Context.AddConstantRule(display.Symbol, display.Name, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_typeParser.Context.AddConstantRule(display.Name, display.Symbol, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddConstantTypeRule(display.Name, display.Display);
@@ -97,7 +97,7 @@ public class DisplayManager
     
     private Result ApplyTypeInfixDisplay(TypeInfixDisplay display)
     {
-        if (_typeParser.Context.AddInfixRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_typeParser.Context.AddInfixRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddInfixTypeRule(display.Name, display.Display, display.LeftAssociative, display.Precedence);
@@ -107,7 +107,7 @@ public class DisplayManager
     
     private Result ApplyTermPrefixDisplay(TermPrefixDisplay display)
     {
-        if (_termParser.Context.AddPrefixRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_termParser.Context.AddPrefixRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddPrefixTermRule(display.Name, display.Display, display.Precedence);
@@ -117,7 +117,7 @@ public class DisplayManager
     
     private Result ApplyTermPostfixDisplay(TermPostfixDisplay display)
     {
-        if (_termParser.Context.AddPostfixRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_termParser.Context.AddPostfixRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddPostfixTermRule(display.Name, display.Display, display.Precedence);
@@ -134,7 +134,7 @@ public class DisplayManager
     
     private Result ApplyTermInfixDisplay(TermInfixDisplay display)
     {
-        if (_termParser.Context.AddInfixRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_termParser.Context.AddInfixRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddInfixTermRule(display.Name, display.Display, display.LeftAssociative, display.Precedence);
@@ -144,7 +144,7 @@ public class DisplayManager
     
     private Result ApplyTermLambdaDisplay(TermLambdaDisplay display)
     {
-        if (_termParser.Context.AddLambdaRule(display.Symbol, display.Name, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
+        if (_termParser.Context.AddLambdaRule(display.Name, display.Symbol, display.Precedence, display.CanInterruptIdentifier, display.Verify).IsError(out var error))
             return error;
         
         _printer.AddLambdaTermRule(display.Name, display.Display, display.Precedence);

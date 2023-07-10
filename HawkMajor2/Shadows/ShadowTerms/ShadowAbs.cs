@@ -162,24 +162,34 @@ public sealed record ShadowAbs : ShadowTerm
         return new ShadowAbs(ParameterType, body);
     }
 
-    public static ShadowAbs FromAbs(Abs abs, Dictionary<string, ShadowVarType> fixedTerms, Dictionary<string, ShadowVarType> fixedTypes)
+    public static ShadowAbs FromAbs(Abs abs, Dictionary<string, ShadowVar> fixedTerms, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         var parameterType = ShadowType.ToShadowType(abs.ParameterType, fixedTypes);
         var (body, free) = abs.GetBody();
-        
-        var shadowBody = ShadowTerm.ToShadowTerm(body, fixedTerms, fixedTypes);
-        
-        ShadowVarType? currentFreeType = fixedTerms.TryGetValue(free.Name, out var freeType) ? freeType : null;
-        
-        fixedTerms[free.Name] = ShadowVarType.Free;
-        
-        var shadowFree = (ShadowFree) ShadowVar.FromFree(free, fixedTerms, fixedTypes);
 
-        if (currentFreeType != null)
-            fixedTerms[free.Name] = currentFreeType.Value;
-        else
+        ShadowTerm shadowBody;
+
+        if (fixedTerms.TryGetValue(free.Name, out var shadowFreeValue))
+        {
             fixedTerms.Remove(free.Name);
+            shadowBody = ToShadowTerm(body, fixedTerms, fixedTypes);
+            fixedTerms[free.Name] = shadowFreeValue;
+        }
+        else
+        {
+            shadowBody = ToShadowTerm(body, fixedTerms, fixedTypes);
+        }
 
-        return new ShadowAbs(shadowBody, shadowFree);
+        return new ShadowAbs(shadowBody, new ShadowFree(free.Name, parameterType));
+    }
+
+    public override ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types)
+    {
+        return new ShadowAbs(ParameterType.FixTypes(types), Body.FixTerms(terms, types));
+    }
+
+    public override ShadowAbs FixMeta()
+    {
+        return new ShadowAbs(ParameterType.FixMeta(), Body.FixMeta());
     }
 }

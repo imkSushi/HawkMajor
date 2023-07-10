@@ -6,6 +6,7 @@ using Printing;
 using Results;
 using Valiant;
 using Valiant.Terms;
+using Valiant.Types;
 
 namespace HawkMajor2.Shadows;
 
@@ -237,7 +238,7 @@ public sealed record ShadowTheorem : IPrintable
         return new Conjecture(newPremises, newConclusion);
     }
     
-    public static ShadowTheorem FromConjecture(Conjecture conjecture, Dictionary<string, ShadowVarType> fixedTerms, Dictionary<string, ShadowVarType> fixedTypes)
+    public static ShadowTheorem FromConjecture(Conjecture conjecture, Dictionary<string, ShadowVar> fixedTerms, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         var premises = new List<ShadowTerm>();
         
@@ -247,5 +248,10 @@ public sealed record ShadowTheorem : IPrintable
         }
         
         return new ShadowTheorem(premises, ShadowTerm.ToShadowTerm(conjecture.Conclusion, fixedTerms, fixedTypes));
+    }
+
+    public ShadowTheorem FixMeta()
+    {
+        return new ShadowTheorem(Premises.Select(p => p.FixMeta()), Conclusion.FixMeta());
     }
 }

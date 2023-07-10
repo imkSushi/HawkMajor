@@ -25,7 +25,7 @@ public abstract record ShadowType : IPrintable
 
     public abstract Result<Type> ConvertToType(Dictionary<ShadowTyFixed, Type> typeMap, Kernel kernel);
 
-    public static ShadowType ToShadowType(Type type, Dictionary<string, ShadowVarType> fixedTypes)
+    public static ShadowType ToShadowType(Type type, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         return type switch
         {
@@ -36,4 +36,5 @@ public abstract record ShadowType : IPrintable
     }
 
     public abstract ShadowType FixTypes(HashSet<string> toFix);
+    public abstract ShadowType FixMeta();
 }

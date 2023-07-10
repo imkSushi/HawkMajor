@@ -94,8 +94,18 @@ public sealed record ShadowApp : ShadowTerm
     {
         return new ShadowApp(Application.BindVariable(free, depth), Argument.BindVariable(free, depth));
     }
-    
-    public static ShadowApp FromApp(App app, Dictionary<string, ShadowVarType> fixedTerms, Dictionary<string, ShadowVarType> fixedTypes)
+
+    public override ShadowTerm FixTerms(HashSet<string> terms, HashSet<string> types)
+    {
+        return new ShadowApp(Application.FixTerms(terms, types), Argument.FixTerms(terms, types));
+    }
+
+    public override ShadowApp FixMeta()
+    {
+        return new ShadowApp(Application.FixMeta(), Argument.FixMeta());
+    }
+
+    public static ShadowApp FromApp(App app, Dictionary<string, ShadowVar> fixedTerms, Dictionary<string, ShadowTyMeta> fixedTypes)
     {
         return new ShadowApp(ToShadowTerm(app.Application, fixedTerms, fixedTypes), ToShadowTerm(app.Argument, fixedTerms, fixedTypes));
     }
