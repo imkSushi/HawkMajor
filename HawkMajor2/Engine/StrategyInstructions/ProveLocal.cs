@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Shadows;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Shadows;
 using HawkMajor2.Shadows.ShadowTerms;
 using HawkMajor2.Shadows.ShadowTerms.MatchData;
 using HawkMajor2.Shadows.ShadowTypes;
@@ -29,8 +30,7 @@ public sealed record ProveLocal(ShadowTheorem Theorem) : StrategyInstruction
                     .Concat(match.FixedTermMap)
                     .ToDictionary(kv => kv.Key, kv => kv.Value);
                         
-                var result = ApplyInstruction(data with{TermMap = newTermMap, TypeMap = newTypeMap, InstructionIndex = data.InstructionIndex + 1});
-                if (result is not null)
+                if (ApplyInstruction(data with{TermMap = newTermMap, TypeMap = newTypeMap, InstructionIndex = data.InstructionIndex + 1}).IsNotNull(out var result))
                     return result;
             }
         }

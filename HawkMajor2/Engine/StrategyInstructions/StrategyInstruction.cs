@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Shadows;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Shadows;
 using Valiant;
 
 namespace HawkMajor2.Engine.StrategyInstructions;
@@ -23,12 +24,10 @@ public abstract record StrategyInstruction
         if (!second.ConvertToConjecture(data.TermMap, data.TypeMap, data.Conjecture.Premises, data.Kernel).Deconstruct(out var secondOutput, out _))
             return null;
         
-        var firstThm = Prove(firstOutput, data, false);
-        if (firstThm is null)
+        if (Prove(firstOutput, data, false).IsNull(out var firstThm))
             return null;
         
-        var secondThm = Prove(secondOutput, data, false);
-        if (secondThm is null)
+        if (Prove(secondOutput, data, false).IsNull(out var secondThm))
             return null;
         
         return (firstThm, secondThm);
@@ -39,20 +38,17 @@ public abstract record StrategyInstruction
         for (var i = data.LocalTheorems.Count - 1; i >= 0; i--)
         {
             var localThm = data.LocalTheorems[i];
-            var thm = output.CheckIfInstance(localThm, data.Kernel);
 
-            if (thm is null)
+            if (output.CheckIfInstance(localThm, data.Kernel).IsNull(out var thm))
                 continue;
             if (!applyNextInstruction)
                 return thm;
 
-            var result = TryTheorem(thm, data);
-            if (result is not null)
+            if (TryTheorem(thm, data).IsNotNull(out var result))
                 return result;
         }
 
-        var workspaceProved = data.Workspace.Prove(output);
-        if (workspaceProved is null)
+        if (data.Workspace.Prove(output).IsNull(out var workspaceProved))
             return null;
         
         if (!applyNextInstruction)
@@ -63,13 +59,11 @@ public abstract record StrategyInstruction
 
     protected static Theorem? TryTheorem(Theorem theorem, ProvingData data)
     {
-        var output = data.Conjecture.CheckIfInstance(theorem, data.Kernel);
-        if (output is not null)
+        if (data.Conjecture.CheckIfInstance(theorem, data.Kernel).IsNotNull(out var output))
             return output;
                 
         data.LocalTheorems.Add(theorem);
-        var result = ApplyInstruction(data with {InstructionIndex = data.InstructionIndex + 1});
-        if (result is not null)
+        if (ApplyInstruction(data with {InstructionIndex = data.InstructionIndex + 1}).IsNotNull(out var result))
             return result;
         data.LocalTheorems.RemoveAt(data.LocalTheorems.Count - 1);
                 

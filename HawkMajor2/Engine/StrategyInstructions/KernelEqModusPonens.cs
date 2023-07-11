@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Shadows;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Shadows;
 using Valiant;
 
 namespace HawkMajor2.Engine.StrategyInstructions;
@@ -7,11 +8,8 @@ public sealed record KernelEqModusPonens(ShadowTheorem Major, ShadowTheorem Mino
 {
     protected override Theorem? Apply(ProvingData data)
     {
-        var theorems = Prove(Major, Minor, data);
-        if (theorems is null)
+        if (Prove(Major, Minor, data).IsNull(out var majorThm, out var minorThm))
             return null;
-        
-        var (majorThm, minorThm) = theorems.Value;
                 
         if (!data.Kernel.EqModusPonens(majorThm, minorThm).Deconstruct(out var thm, out _))
             return null;

@@ -70,13 +70,13 @@ public partial class ScriptParser
                         
                     private partial Result Parse{{type}}()
                     {
-                        if (!ExpectIdentifier(out var name, out var error))
+                        if (!_lexer.ExpectIdentifier(out var name, out var error))
                             return error;
 
-                        if (!ExpectIdentifier(out var symbol, out error))
+                        if (!_lexer.ExpectIdentifier(out var symbol, out error))
                             return error;
                         
-                        if (!ExpectIdentifier(out var displayName, out error))
+                        if (!_lexer.ExpectIdentifier(out var displayName, out error))
                             return error;
                 """);
 
@@ -84,7 +84,7 @@ public partial class ScriptParser
             {
                 output.AppendLine("""
                                   
-                                          if (!ExpectIdentifier(out var associativityString, out error))
+                                          if (!_lexer.ExpectIdentifier(out var associativityString, out error))
                                               return error;
                                           
                                           bool associativity;
@@ -107,7 +107,7 @@ public partial class ScriptParser
             {
                 output.AppendLine("""
                             
-                                    if (!ExpectIdentifier(out var precedenceString, out error))
+                                    if (!_lexer.ExpectIdentifier(out var precedenceString, out error))
                                         return error;
                                     
                                     if (!int.TryParse(precedenceString, out var precedence))
@@ -150,7 +150,7 @@ public partial class ScriptParser
                                         }
                                     }
 
-                                    if (!ExpectEndOfLine(out error))
+                                    if (!_lexer.ExpectEndOfLine(out error))
                                         return error;
                                         
                                     _displayManager.ApplyDisplay(new {{type}}(name, symbol, displayName,

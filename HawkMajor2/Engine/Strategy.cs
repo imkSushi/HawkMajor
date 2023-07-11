@@ -1,4 +1,5 @@
 ﻿using HawkMajor2.Engine.StrategyInstructions;
+using HawkMajor2.Extensions;
 using HawkMajor2.Shadows;
 using HawkMajor2.Shadows.ShadowTerms;
 using HawkMajor2.Shadows.ShadowTerms.MatchData;
@@ -24,17 +25,20 @@ public class Strategy
     {
         foreach (var matching in Pattern.Match(conjecture, new MatchTermData(), true, false))
         {
-            var typeMap = GenerateUnfixedTypeMap(matching);
-            
-            var termMap = GenerateUnfixedTermMap(matching);
-
-            var result = ApplyFirstInstruction(conjecture, workspace, termMap, typeMap);
-            
-            if (result is not null)
+            if (TryApplyMap(conjecture, workspace, matching).IsNotNull(out var result))
                 return result;
         }
         
         return null;
+    }
+
+    private Theorem? TryApplyMap(Conjecture conjecture, Workspace workspace, MatchTermData matching)
+    {
+        var typeMap = GenerateUnfixedTypeMap(matching);
+
+        var termMap = GenerateUnfixedTermMap(matching);
+
+        return ApplyFirstInstruction(conjecture, workspace, termMap, typeMap);
     }
 
     private Theorem? ApplyFirstInstruction(Conjecture conjecture, Workspace workspace, Dictionary<ShadowFixed, Term> termMap, Dictionary<ShadowTyFixed, Type> typeMap)

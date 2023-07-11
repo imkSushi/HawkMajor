@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Shadows;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Shadows;
 using Valiant;
 
 namespace HawkMajor2.Engine.StrategyInstructions;
@@ -7,11 +8,8 @@ public sealed record KernelCongruence(ShadowTheorem AppTheorem, ShadowTheorem Ar
 {
     protected override Theorem? Apply(ProvingData data)
     {
-        var theorems = Prove(AppTheorem, ArgTheorem, data);
-        if (theorems is null)
+        if (Prove(AppTheorem, ArgTheorem, data).IsNull(out var appThm, out var argThm))
             return null;
-        
-        var (appThm, argThm) = theorems.Value;
                 
         if (!data.Kernel.Congruence(appThm, argThm).Deconstruct(out var thm, out _))
             return null;

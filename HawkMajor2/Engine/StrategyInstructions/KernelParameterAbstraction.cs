@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Shadows;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Shadows;
 using HawkMajor2.Shadows.ShadowTerms;
 using Valiant;
 using Valiant.Terms;
@@ -15,8 +16,7 @@ public sealed record KernelParameterAbstraction(ShadowTerm Free, ShadowTheorem T
         if (freeTerm is not Free free)
             return null;
                 
-        var theorem = Prove(Theorem, data, false);
-        if (theorem is null)
+        if (Prove(Theorem, data, false).IsNull(out var theorem))
             return null;
                 
         if (!data.Kernel.Abstraction(free, theorem).Deconstruct(out var thm, out _))

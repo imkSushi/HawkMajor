@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using HawkMajor2.Engine;
 using HawkMajor2.Engine.Displays;
 using HawkMajor2.Engine.StrategyInstructions;
@@ -22,7 +23,7 @@ public partial class ScriptParser
     private TermParser _termParser;
     private TheoremParser _theoremParser;
     private TheoremPrinter _printer;
-    private Lexer _lexer;
+    private ScriptLexer _lexer;
     private Kernel _kernel;
     public readonly Workspace Workspace;
     private LexerConfig _baseLexerConfig;
@@ -31,7 +32,7 @@ public partial class ScriptParser
     public ScriptParser(Kernel kernel)
     {
         _kernel = kernel;
-        _lexer = new Lexer("");
+        _lexer = new ScriptLexer("");
         
         Workspace = new Workspace();
         
@@ -77,12 +78,12 @@ public partial class ScriptParser
 
     private Result<bool> ParseScriptItem()
     {
-        SkipNewLines();
+        _lexer.SkipNewLines();
 
         if (_lexer.Current is EndOfExpressionToken)
             return true;
 
-        if (!ExpectIdentifier().Deconstruct(out var identifier, out var error))
+        if (!_lexer.ExpectIdentifier().Deconstruct(out var identifier, out var error))
             return error;
 
         return (identifier switch
@@ -112,7 +113,7 @@ public partial class ScriptParser
     private StringResult ParseLoadFileName()
     {
         var fileName = new StringBuilder();
-        if (!ExpectIdentifier().Deconstruct(out var fileIdentifier, out var error))
+        if (!_lexer.ExpectIdentifier().Deconstruct(out var fileIdentifier, out var error))
             return (false, error);
 
         fileName.Append(fileIdentifier);
@@ -122,7 +123,7 @@ public partial class ScriptParser
             _lexer.MoveNext();
         }
 
-        if (ExpectEndOfLine().IsError(out error))
+        if (!_lexer.ExpectEndOfLine(out error))
             return (false, error);
         
         return (true, fileName.ToString());
@@ -130,10 +131,7 @@ public partial class ScriptParser
 
     private Result ParseDisplay()
     {
-        if (!ExpectIdentifier().Deconstruct(out var termOrType, out var error))
-            return error;
-
-        if (!ExpectIdentifier().Deconstruct(out var variant, out error))
+        if (!_lexer.ExpectIdentifiers(out var termOrType, out var variant, out var error))
             return error;
 
         return (termOrType, variant) switch
@@ -181,22 +179,16 @@ public partial class ScriptParser
     
     private Result ParseTypeDefinition()
     {
-        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
-            return error;
-
-        if (!ExpectIdentifier().Deconstruct(out var constructorName, out error))
-            return error;
-
-        if (!ExpectIdentifier().Deconstruct(out var destructorName, out error))
+        if (!_lexer.ExpectIdentifiers(out var name, out var constructorName, out var destructorName, out var error))
             return error;
         
-        if (ExpectKeyword("=").IsError(out error))
+        if (_lexer.ExpectKeyword("=").IsError(out error))
             return error;
         
         if (!ParseTerm().Deconstruct(out var term, out error))
             return error;
         
-        if (ExpectEndOfLine().IsError(out error))
+        if (_lexer.ExpectEndOfLine().IsError(out error))
             return error;
         
         if (!_kernel.NewBasicTypeDefinition(name, constructorName, destructorName, term).Deconstruct(out var constructorThm, out var destructorThm, out error))
@@ -210,16 +202,16 @@ public partial class ScriptParser
 
     private Result ParseConstant()
     {
-        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
+        if (!_lexer.ExpectIdentifier(out var name, out var error))
             return error;
         
-        if (ExpectKeyword("=").IsError(out error))
+        if (_lexer.ExpectKeyword("=").IsError(out error))
             return error;
         
         if (!ParseTerm().Deconstruct(out var term, out error))
             return error;
         
-        if (ExpectEndOfLine().IsError(out error))
+        if (_lexer.ExpectEndOfLine().IsError(out error))
             return error;
         
         if (!_kernel.NewBasicDefinition(name, term).Deconstruct(out var thm, out error))
@@ -232,7 +224,7 @@ public partial class ScriptParser
 
     private Result ParseStrategy(VisibilityModifier? modifier = null)
     {
-        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
+        if (!_lexer.ExpectIdentifier(out var name, out var error))
             return error;
         
         if (!ParseConjecture().Deconstruct(out var conjecture, out error))
@@ -245,66 +237,15 @@ public partial class ScriptParser
         var frees = conjecture.FreesIn().ToDictionary(x => x.Name, x => (ShadowVar)new ShadowUnfixed(x.Name, ShadowType.ToShadowType(x.Type, freeTypes)));
         
         var shadowTheorem = ShadowTheorem.FromConjecture(conjecture, frees, freeTypes);
-
-        FixVariables(frees, freeTypes);
-
-        if (ExpectKeyword("{").IsError(out error))
+        
+        if (!StrategyParser.ParseStrategy(frees, freeTypes, previousTerms, _lexer, this, name, shadowTheorem).Deconstruct(out var strategy, out error))
             return error;
 
-        var instructions = new List<StrategyInstruction>();
-        
-        SkipNewLines();
+        return RegisterStrategy(modifier, strategy);
+    }
 
-        while (_lexer.Current is not KeywordToken {Value: "}"})
-        {
-            if (!ExpectIdentifier().Deconstruct(out var instruction, out error))
-                return error;
-
-            switch (instruction)
-            {
-                case "match":
-                {
-                    if (!ParseStratMatch(frees, freeTypes, previousTerms).Deconstruct(out var stratMatch, out error))
-                        return error;
-                    
-                    instructions.Add(stratMatch);
-                    continue;
-                }
-                case "prove":
-                {
-                    if (!ParseStratProve(frees, freeTypes, previousTerms).Deconstruct(out var stratProve, out error))
-                        return error;
-                    
-                    instructions.Add(stratProve);
-                    continue;
-                }
-                case "apply":
-                {
-                    if (!ParseStratApply(frees, freeTypes, previousTerms).Deconstruct(out var stratApply, out error))
-                        return error;
-                    
-                    instructions.Add(stratApply);
-                    continue;
-                }
-                case "kernel":
-                {
-                    if (!ParseStratKernel(frees, freeTypes, previousTerms).Deconstruct(out var stratKernel, out error))
-                        return error;
-                    
-                    instructions.Add(stratKernel);
-                    continue;
-                }
-                default:
-                {
-                    return _lexer.GenerateError($"Unrecognised strategy instruction: {instruction}");
-                }
-            }
-        }
-        
-        _lexer.MoveNext();
-        
-        var strategy = new Strategy(name, shadowTheorem, instructions);
-
+    private Result RegisterStrategy(VisibilityModifier? modifier, Strategy strategy)
+    {
         switch (modifier)
         {
             case VisibilityModifier.Global:
@@ -323,211 +264,19 @@ public partial class ScriptParser
             default:
                 return _lexer.GenerateError($"Unrecognised visibility modifier: {modifier}");
         }
-        
+
         return Result.Success;
     }
 
-    private Result<StrategyInstruction> ParseStratMatch(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
+    internal Result<Type> ParseType()
     {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out var error))
-            return error;
-
-        return new ProveLocal(thm);
-    }
-    
-    private Result<StrategyInstruction> ParseStratProve(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out var error))
-            return error;
-
-        return new Prove(thm);
-    }
-
-    private Result<ShadowTheorem> ParseStratTheorem(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms, bool endLine = true)
-    {
-        if (!ParseConjecture(previousTerms).Deconstruct(out var conjecture, out var error))
-            return error;
-        
-        previousTerms.Add(conjecture.Conclusion);
-        previousTerms.AddRange(conjecture.Premises);
-
-        if (endLine)
-        {
-            if (ExpectEndOfLine().IsError(out error))
-                return error;
-        }
-        
-        foreach (var freeType in conjecture.FreeTypesIn())
-        {
-            fixedTypes.TryAdd(freeType.Name, new ShadowTyUnfixed(freeType.Name));
-        }
-
-        foreach (var free in conjecture.FreesIn().Where(free => !fixedTerms.ContainsKey(free.Name)))
-        {
-            fixedTerms[free.Name] = new ShadowUnfixed(free.Name, ShadowType.ToShadowType(free.Type, fixedTypes));
-        }
-        
-        var shadowTheorem = ShadowTheorem.FromConjecture(conjecture, fixedTerms, fixedTypes);
-        
-        FixVariables(fixedTerms, fixedTypes);
-
-        return shadowTheorem;
-    }
-    
-    private Result<StrategyInstruction> ParseStratApply(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
-            return error;
-
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var thm, out error))
-            return error;
-        
-        if (!Workspace.Strategies.TryGetValue(name, out var strategy))
-            return _lexer.GenerateError($"Unrecognised strategy: {name}");
-
-        return new ProveBy(strategy, thm);
-    }
-    
-    private Result<StrategyInstruction> ParseStratKernel(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
-            return error;
-
-        return name switch
-        {
-            "refl" => ParseKernelReflectivity(fixedTerms, fixedTypes, previousTerms),
-            "cong" => ParseKernelCongruence(fixedTerms, fixedTypes, previousTerms),
-            "pabs" => ParseKernelParameterAbstraction(fixedTerms, fixedTypes, previousTerms),
-            "tabs" => ParseKernelTypeAbstraction(fixedTerms, fixedTypes, previousTerms),
-            "beta" => ParseKernelBetaReduction(fixedTerms, fixedTypes, previousTerms),
-            "asm"  => ParseKernelAssume(fixedTerms, fixedTypes, previousTerms),
-            "mp"   => ParseKernelModusPonens(fixedTerms, fixedTypes, previousTerms),
-            "anti" => ParseKernelAntisymmetry(fixedTerms, fixedTypes, previousTerms),
-            _      => _lexer.GenerateError($"Unrecognised kernel strategy: {name}")
-        };
-    }
-    
-    private Result<StrategyInstruction> ParseKernelReflectivity(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var term, out var error))
-            return error;
-        
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        return new KernelReflexivity(term);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelCongruence(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var appThm, out var error))
-            return error;
-        
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var argThm, out error))
-            return error;
-
-        return new KernelCongruence(appThm, argThm);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelParameterAbstraction(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var term, out var error))
-            return error;
-        
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out error))
-            return error;
-
-        return new KernelParameterAbstraction(term, thm);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelTypeAbstraction(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratType(fixedTypes).Deconstruct(out var type, out var error))
-            return error;
-        
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out error))
-            return error;
-
-        return new KernelTypeAbstraction(type, thm);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelBetaReduction(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var term, out var error))
-            return error;
-        
-        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var arg, out error))
-            return error;
-        
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        return new KernelBetaReduction(term, arg);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelAssume(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTerm(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var thm, out var error))
-            return error;
-        
-        if (ExpectEndOfLine().IsError(out error))
-            return error;
-
-        return new KernelAssume(thm);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelModusPonens(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var maj, out var error))
-            return error;
-        
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var min, out error))
-            return error;
-
-        return new KernelEqModusPonens(maj, min);
-    }
-    
-    private Result<StrategyInstruction> ParseKernelAntisymmetry(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms, false).Deconstruct(out var left, out var error))
-            return error;
-        
-        if (!ParseStratTheorem(fixedTerms, fixedTypes, previousTerms).Deconstruct(out var right, out error))
-            return error;
-
-        return new KernelAntisymmetry(left, right);
-    }
-
-    private Result<ShadowType> ParseStratType(Dictionary<string, ShadowTyMeta> fixedTypes)
-    {
-        if (!ParseType().Deconstruct(out var type, out var error))
-            return error;
-        
-        return ShadowType.ToShadowType(type, fixedTypes);
-    }
-
-    private Result<Type> ParseType()
-    {
-        SkipNewLines();
+        _lexer.SkipNewLines();
         
         string? error;
         
         if (_lexer.Current is not KeywordToken { Value: "\"" })
         {
-            if (!ExpectIdentifier().Deconstruct(out var typeString, out error))
+            if (!_lexer.ExpectIdentifier().Deconstruct(out var typeString, out error))
                 return error;
             
             return _typeParser.Parse(typeString);
@@ -575,155 +324,55 @@ public partial class ScriptParser
         return _typeParser.Parse(conjectureStringBuilder.ToString());
     }
 
-    private Result<ShadowTerm> ParseStratTerm(Dictionary<string, ShadowVar> fixedTerms,
-        Dictionary<string, ShadowTyMeta> fixedTypes, List<Term> previousTerms)
-    {
-        if (!ParseTerm(previousTerms).Deconstruct(out var term, out var error))
-            return error;
-        
-        previousTerms.Add(term);
-        
-        return ShadowTerm.ToShadowTerm(term, fixedTerms, fixedTypes);
-    }
-
-    private Result<Term> ParseTerm(List<Term>? previousTerms = null)
+    internal Result<Term> ParseTerm(List<Term>? previousTerms = null)
     {
         previousTerms ??= new List<Term>();
         
-        SkipNewLines();
+        _lexer.SkipNewLines();
         
         string? error;
+        string? termString;
 
         if (_lexer.Current is not KeywordToken { Value: "\"" })
         {
-            if (!ExpectIdentifier().Deconstruct(out var termString, out error))
+            if (!_lexer.ExpectIdentifier(out termString, out error))
                 return error;
-            
-            return _termParser.Parse(termString);
         }
-        
-        _lexer.MoveNext();
-
-        var conjectureStringBuilder = new StringBuilder();
-        while (_lexer.Current is not KeywordToken { Value: "\"" })
+        else
         {
-            switch (_lexer.Current)
-            {
-                case IdentifierToken { Value: var identifierValue }:
-                {
-                    conjectureStringBuilder.Append(identifierValue);
-                    break;
-                }
-                case KeywordToken { Value: var keywordValue }:
-                {
-                    conjectureStringBuilder.Append(keywordValue);
-                    break;
-                }
-                case ErrorToken { Message: var errorMessage }:
-                {
-                    return _lexer.GenerateError(errorMessage);
-                }
-                case NewLineToken:
-                {
-                    conjectureStringBuilder.Append('\n');
-                    break;
-                }
-                case EndOfExpressionToken:
-                {
-                    return _lexer.GenerateError("Unexpected end of expression");
-                }
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-
-            _lexer.MoveNext();
+            if (!_lexer.ParseQuotedString(out termString, out error))
+                return error;
         }
 
-        _lexer.MoveNext();
-
-        return _termParser.Parse(conjectureStringBuilder.ToString(), previousTerms);
+        return _termParser.Parse(termString, previousTerms);
     }
 
-    private static void FixVariables(Dictionary<string, ShadowVar> frees, Dictionary<string, ShadowTyMeta> freeTypes)
-    {
-        foreach (var key in frees.Keys)
-        {
-            var value = frees[key];
-            frees[key] = value.FixMeta();
-        }
-
-        foreach (var key in freeTypes.Keys)
-        {
-            var value = freeTypes[key];
-            freeTypes[key] = value.FixMeta();
-        }
-    }
-
-    private Result<Conjecture> ParseConjecture(List<Term>? previousTerms = null)
+    internal Result<Conjecture> ParseConjecture(List<Term>? previousTerms = null)
     {
         previousTerms ??= new List<Term>();
         
-        string? error;
-        if (ExpectKeyword("\"").IsError(out error))
+        if (!_lexer.ParseQuotedString(out var conjectureString, out var error))
             return error;
-
-        var conjectureStringBuilder = new StringBuilder();
-        while (_lexer.Current is not KeywordToken { Value: "\"" })
-        {
-            conjectureStringBuilder.Append(' ');
-            switch (_lexer.Current)
-            {
-                case IdentifierToken { Value: var identifierValue }:
-                {
-                    conjectureStringBuilder.Append(identifierValue);
-                    break;
-                }
-                case KeywordToken { Value: var keywordValue }:
-                {
-                    conjectureStringBuilder.Append(keywordValue);
-                    break;
-                }
-                case ErrorToken { Message: var errorMessage }:
-                {
-                    return _lexer.GenerateError(errorMessage);
-                }
-                case NewLineToken:
-                {
-                    conjectureStringBuilder.Append('\n');
-                    break;
-                }
-                case EndOfExpressionToken:
-                {
-                    return _lexer.GenerateError("Unexpected end of expression");
-                }
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-
-            _lexer.MoveNext();
-        }
-
-        _lexer.MoveNext();
-
-        return _theoremParser.Parse(conjectureStringBuilder.ToString(), previousTerms);
+        
+        return _theoremParser.Parse(conjectureString, previousTerms);
     }
 
     private Result ParseProof(VisibilityModifier? modifier = null)
     {
-        if (!ExpectIdentifier().Deconstruct(out var name, out var error))
+        if (!_lexer.ExpectIdentifier().Deconstruct(out var name, out var error))
             return error;
         
         if (!ParseConjecture().Deconstruct(out var conjecture, out error))
             return error;
         
-        if (!ExpectKeyword("{").Deconstruct(out error))
+        if (!_lexer.ExpectKeyword("{").Deconstruct(out error))
             return error;
         
         Workspace.NewScope();
 
         Theorem? lastTheorem = null;
         
-        SkipNewLines();
+        _lexer.SkipNewLines();
 
         while (_lexer.Current is not KeywordToken { Value: "}" })
         {
@@ -737,7 +386,7 @@ public partial class ScriptParser
                 lastTheorem = thm;
             }
         
-            SkipNewLines();
+            _lexer.SkipNewLines();
         }
 
         Theorem theorem;
@@ -787,7 +436,7 @@ public partial class ScriptParser
         
         return Result.Success;
     }
-
+    
     private Result<Theorem?> ParseProofItem()
     {
         if (!ParseConjecture().Deconstruct(out var conjecture, out var error))
@@ -796,8 +445,8 @@ public partial class ScriptParser
         if (_lexer.Current is IdentifierToken { Value: "by" })
         {
             _lexer.MoveNext();
-            SkipNewLines();
-            if (!ExpectIdentifier().Deconstruct(out var name, out error))
+            _lexer.SkipNewLines();
+            if (!_lexer.ExpectIdentifier().Deconstruct(out var name, out error))
                 return error;
             
             if (!Workspace.Strategies.TryGetValue(name, out var strategy))
@@ -821,7 +470,7 @@ public partial class ScriptParser
 
     private Result ParseModifier(VisibilityModifier modifier)
     {
-        if (!ExpectIdentifier(out var identifier, out var error))
+        if (!_lexer.ExpectIdentifier(out var identifier, out var error))
             return error;
 
         switch (identifier)
@@ -844,119 +493,6 @@ public partial class ScriptParser
             {
                 return _lexer.GenerateError($"Unrecognised script item: {identifier}");
             }
-        }
-    }
-    
-
-    [InlineResult("identifier")]
-    private StringResult ExpectIdentifier()
-    {
-        return !ExpectIdentifierToken().Deconstruct(out var identifierToken, out var error) ? (false, error) : (true, identifierToken.Value);
-    }
-    
-    private Result<IdentifierToken> ExpectIdentifierToken()
-    {
-        SkipNewLines();
-
-        if (_lexer.Current is KeywordToken { Value: "\"" })
-            return GetQuotedIdentifier();
-
-        if (_lexer.Current is not IdentifierToken identifier)
-            return _lexer.GenerateError("Expected identifier");
-        
-        _lexer.MoveNext();
-        return identifier;
-    }
-
-    private Result<IdentifierToken> GetQuotedIdentifier()
-    {
-        var data = _lexer.GetCurrentTokenData();
-        _lexer.MoveNext();
-        var stringBuilder = new StringBuilder();
-        var first = true;
-
-        while (_lexer.Current is not KeywordToken { Value: "\"" })
-        {
-            if (first)
-                first = false;
-            else
-                stringBuilder.Append(' ');
-
-            stringBuilder.Append(_lexer.Current.Value);
-            _lexer.MoveNext();
-            switch (_lexer.Current)
-            {
-                case EndOfExpressionToken:
-                    return _lexer.GenerateError("Unexpected end of expression");
-                case ErrorToken { Message: var errorMessage }:
-                    return _lexer.GenerateError(errorMessage);
-            }
-        }
-
-        _lexer.MoveNext();
-        return new IdentifierToken(stringBuilder.ToString(), data);
-    }
-
-    private Result Identifier(string identifier)
-    {
-        SkipNewLines();
-        
-        if (_lexer.Current is not IdentifierToken identifierToken)
-            return _lexer.GenerateError("Expected identifier");
-
-        if (identifierToken.Value != identifier)
-            return _lexer.GenerateError($"Expected identifier {identifier}");
-        
-        _lexer.MoveNext();
-        return Result.Success;
-    }
-
-    private Result<KeywordToken> ExpectKeyword()
-    {
-        SkipNewLines();
-        
-        if (_lexer.Current is not KeywordToken keyword)
-            return _lexer.GenerateError("Expected keyword");
-        
-        _lexer.MoveNext();
-        return keyword;
-    }
-
-    private Result ExpectKeyword(string keyword)
-    {
-        SkipNewLines();
-        
-        if (_lexer.Current is not KeywordToken keywordToken)
-            return _lexer.GenerateError("Expected keyword");
-
-        if (keywordToken.Value != keyword)
-            return _lexer.GenerateError($"Expected keyword {keyword}");
-        
-        _lexer.MoveNext();
-        return Result.Success;
-    }
-
-    private void SkipNewLines()
-    {
-        while (_lexer.Current is NewLineToken)
-            _lexer.MoveNext();
-    }
-    
-    [InlineResult]
-    private Result ExpectEndOfLine()
-    {
-        switch (_lexer.Current)
-        {
-            case NewLineToken:
-                _lexer.MoveNext();
-                return Result.Success;
-            case KeywordToken {Value: ";"}:
-                _lexer.MoveNext();
-                return Result.Success;
-            case EndOfExpressionToken:
-                return Result.Success;
-            default:
-                return _lexer.GenerateError("Expected end of line");
         }
     }
     

@@ -1,4 +1,5 @@
-﻿using HawkMajor2.Shadows;
+﻿using HawkMajor2.Extensions;
+using HawkMajor2.Shadows;
 using Valiant;
 
 namespace HawkMajor2.Engine.StrategyInstructions;
@@ -7,11 +8,8 @@ public sealed record KernelAntisymmetry(ShadowTheorem Left, ShadowTheorem Right)
 {
     protected override Theorem? Apply(ProvingData data)
     {
-        var theorems = Prove(Left, Right, data);
-        if (theorems is null)
+        if (Prove(Left, Right, data).IsNull(out var leftThm, out var rightThm))
             return null;
-        
-        var (leftThm, rightThm) = theorems.Value;
 
         var thm = data.Kernel.Antisymmetry(leftThm, rightThm);
                 

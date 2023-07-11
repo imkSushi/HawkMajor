@@ -3,7 +3,7 @@ using HawkMajor2.Language.Lexing.Tokens;
 
 namespace HawkMajor2.Language.Lexing;
 
-public sealed class Lexer : IEnumerator<Token>
+public class Lexer : IEnumerator<Token>
 {
     private string _expression;
 
@@ -253,13 +253,5 @@ public sealed class Lexer : IEnumerator<Token>
         {
             _column++;
         }
-    }
-
-    public string GenerateError(string message)
-    {
-        if (Current is ErrorToken err)
-            return err.ToString();
-        
-        return $"{GetCurrentTokenData()} Error: {message}";
     }
 }
